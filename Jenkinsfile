@@ -1,62 +1,61 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'M2_HOME'
+    triggers {
+        githubPush()
     }
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        DOCKER_IMAGE_NAME = "daoudmalek/student-management"
+        DOCKERHUB_USER = 'daoudmalek'            // 👉 change to your Docker Hub username
+        IMAGE_NAME = 'devops-malek-daoud'    // 👉 change if needed
     }
 
     stages {
 
-        stage('Code Checkout') {
+        stage('Git Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/malek-daoud/malek_daoud_4SIM.git'
+                git branch: 'master', url: 'https://github.com/malek-daoud/malek_daoud_4SIM.git'
             }
         }
 
-        stage('Build Maven') {
+        stage('Maven Compile') {
             steps {
-                sh "mvn clean package -Dmaven.test.skip=true"
+                sh 'mvn compile'
+            }
+        }
+
+        
+
+        stage('Maven Package') {
+            steps {
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 sh """
-                docker build -t $DOCKER_IMAGE_NAME:1.0.0 .
+                    docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest .
                 """
             }
         }
 
         stage('Docker Login') {
             steps {
-                sh """
-                echo "$DOCKERHUB_CREDENTIALS_PSW" | docker login -u "$DOCKERHUB_CREDENTIALS_USR" --password-stdin
-                """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                 usernameVariable: 'USER',
+                                                 passwordVariable: 'PASS')]) {
+                    sh """
+                        echo "$PASS" | docker login -u "$USER" --password-stdin
+                    """
+                }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Docker Push') {
             steps {
-                sh """
-                docker push $DOCKER_IMAGE_NAME:1.0.0
-                """
+                sh "docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest"
             }
-        }
-
-    }
-
-    post {
-        success {
-            echo "Build & Push Success!"
-        }
-        failure {
-            echo "Build Failed!"
         }
     }
 }
